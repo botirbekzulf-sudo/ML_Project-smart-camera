@@ -18,6 +18,10 @@ const featuresUsed = document.getElementById("featuresUsed");
 const specsCard = document.getElementById("specsCard");
 const specsBars = document.getElementById("specsBars");
 const lookupError = document.getElementById("lookupError");
+const manualRam = document.getElementById("manualRam");
+const manualBattery = document.getElementById("manualBattery");
+const manualStorage = document.getElementById("manualStorage");
+const manualCamera = document.getElementById("manualCamera");
 
 /**
  * Шаг 1: кадр с камеры -> Gemini 3.6 (мультимодально) -> текстовый ответ
@@ -84,13 +88,56 @@ modelForm.addEventListener("submit", async (event) => {
       window.open(data.source_url, "_blank", "noopener");
     }
 
-    // Шаг 3: то, что удалось найти (или пусто) -> ценовой класс через ML-модель
-    await predictPriceFromText(data.raw_text || "");
+    // Шаг 3: если пользователь вписал характеристики вручную — используем
+    // их (даёт точный и РАЗНЫЙ результат для разных устройств). Иначе —
+    // то, что нашлось в raw_text (без платного Google API оно обычно
+    // пустое, и тогда модель работает на одних значениях по умолчанию —
+    // отсюда одинаковый класс для всех устройств).
+    const manualForm = collectManualSpecs();
+    if (manualForm) {
+      await predictPriceFromForm(manualForm);
+    } else {
+      await predictPriceFromText(data.raw_text || "");
+    }
   } catch (err) {
     lookupError.textContent = `Ошибка соединения: ${err}`;
     lookupError.hidden = false;
   }
 });
+
+/** Собирает заполненные вручную поля характеристик. null, если все пустые. */
+function collectManualSpecs() {
+  const ramGb = parseFloat(manualRam.value);
+  const batteryMah = parseFloat(manualBattery.value);
+  const storageGb = parseFloat(manualStorage.value);
+  const cameraMp = parseFloat(manualCamera.value);
+
+  if (![ramGb, batteryMah, storageGb, cameraMp].some((v) => !isNaN(v) && v > 0)) {
+    return null;
+  }
+
+  const form = {};
+  if (!isNaN(ramGb)) form.ram = ramGb * 1024; // модель ждёт RAM в МБ
+  if (!isNaN(batteryMah)) form.battery_power = batteryMah;
+  if (!isNaN(storageGb)) form.int_memory = storageGb;
+  if (!isNaN(cameraMp)) form.pc = cameraMp;
+  return form;
+}
+
+async function predictPriceFromForm(form) {
+  try {
+    const response = await fetch(`${API_BASE}/api/predict-price`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ form }),
+    });
+    const data = await response.json();
+    if (data.error) return;
+    renderPriceResult(data);
+  } catch (err) {
+    console.error(err);
+  }
+}
 
 async function predictPriceFromText(rawText) {
   try {

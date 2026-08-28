@@ -7,6 +7,12 @@ requests==2.32.3
 pillow==10.4.0
 gunicorn==22.0.0
 
+# NOTE: Python version is pinned to 3.11 via the .python-version file in
+# the repo root. pandas==2.2.2 and scikit-learn==1.5.1 don't ship
+# prebuilt wheels for Python 3.13 (Railway's current default), which
+# forces pip to compile them from source and fails on newer compilers.
+# If you upgrade these packages later, you can remove .python-version.
+
 # torch/torchvision are commented out for the first deploy: they weigh
 # about 800MB and slow down/inflate the build on Railway's free tier.
 # device_classifier.py imports them LAZILY -- only inside train() and
