@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Сканер устройства — DevicePrice</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="logo" href="index.html">Device<em>Price</em></a>
+    <span class="badge" id="statusBadge">Ожидание камеры…</span>
+  </div>
+</header>
+
+<main class="scan-page wrap">
+
+  <section class="camera-panel">
+    <div class="camera-frame">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas" hidden></canvas>
+      <div class="scan-overlay">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+      </div>
+    </div>
+    <div class="camera-controls">
+      <button id="captureBtn" class="btn-primary">📸 Сделать снимок</button>
+      <label class="btn-ghost file-label">
+        Загрузить фото
+        <input type="file" id="fileInput" accept="image/*" hidden>
+      </label>
+    </div>
+  </section>
+
+  <section class="result-panel" id="resultPanel" hidden>
+
+    <div class="card gemini-vision-card" id="geminiVisionCard">
+      <span class="card-label">✦ Что видит Gemini 3.6</span>
+      <p id="geminiVisionText" class="gemini-answer">Наведите камеру на устройство…</p>
+    </div>
+
+    <div class="card">
+      <span class="card-label">Название модели</span>
+      <p class="muted">Поиск проверяется через Gemini 3.6 — принимает только технику (телефоны, ноутбуки, ПК и т.п.).</p>
+      <form id="modelForm" class="model-form">
+        <input type="text" id="modelInput" placeholder="Например: iPhone 13 Pro, ASUS ROG Strix G16"
+               autocomplete="off">
+        <button type="submit" class="btn-primary">Найти</button>
+      </form>
+      <a id="googleLink" class="google-link" target="_blank" rel="noopener" hidden>
+        Открыть характеристики в Google →
+      </a>
+      <p id="lookupError" class="field-error" hidden></p>
+    </div>
+
+    <div class="card" id="priceCard" hidden>
+      <span class="card-label">Ценовой класс (ML-модель)</span>
+      <h2 id="priceClassValue">—</h2>
+      <div class="specs-bars" id="probaBars"></div>
+      <details class="specs-details">
+        <summary>Характеристики, использованные моделью</summary>
+        <pre id="featuresUsed"></pre>
+      </details>
+    </div>
+
+    <div class="card" id="specsCard" hidden>
+      <span class="card-label">Характеристики устройства</span>
+      <div class="specs-bars" id="specsBars"></div>
+    </div>
+
+  </section>
+
+</main>
+
+<script src="js/camera.js"></script>
+<script src="js/api.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+.env
+
+# кадры, сохранённые backend'ом при скане — не нужны в репозитории
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# крупные веса CV-модели — если появятся, храни через Git LFS или
+# отдельное файловое хранилище (S3 и т.п.), не в обычном git
+backend/cv_module/device_classifier_weights.pth
+
+.DS_Store

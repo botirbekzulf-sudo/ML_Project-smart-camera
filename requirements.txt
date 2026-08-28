@@ -1,0 +1,18 @@
+flask==3.0.3
+flask-cors==4.0.1
+scikit-learn==1.5.1
+pandas==2.2.2
+joblib==1.4.2
+requests==2.32.3
+pillow==10.4.0
+gunicorn==22.0.0
+
+# torch/torchvision are commented out for the first deploy: they weigh
+# about 800MB and slow down/inflate the build on Railway's free tier.
+# device_classifier.py imports them LAZILY -- only inside train() and
+# inside predict() once the weights file already exists. Until the
+# weights exist, a fallback heuristic (PIL only) is used instead.
+# Uncomment these two lines once you train the CV model and commit
+# device_classifier_weights.pth:
+# torch==2.3.1
+# torchvision==0.18.1
