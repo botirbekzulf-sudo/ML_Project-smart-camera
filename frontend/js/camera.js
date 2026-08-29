@@ -3,13 +3,16 @@
  * Доступ к камере устройства + непрерывное сканирование в реальном времени:
  * пока камера включена, кадр автоматически уходит в Gemini 3.6 (backend
  * /api/gemini-vision) каждые SCAN_INTERVAL_MS миллисекунд, и его текстовый
- * ответ выводится прямо на сайте. Интервал больше, чем был бы для лёгкой
- * локальной модели — мультимодальный запрос к Gemini дороже и медленнее.
- * Кнопка "Сканировать" включает/выключает цикл вручную. Также поддерживается
- * загрузка файла как запасной вариант, если камеры нет.
+ * ответ выводится прямо на сайте.
+ *
+ * ВАЖНО про лимиты Gemini API: бесплатный тариф ограничивает число
+ * запросов в минуту. Если backend вернёт ошибку 429 (Too Many Requests),
+ * сканер сам делает более длинную паузу (COOLDOWN_MS) перед следующей
+ * попыткой, вместо того чтобы продолжать долбить API в том же темпе.
  */
 
-const SCAN_INTERVAL_MS = 3000;
+const SCAN_INTERVAL_MS = 6000;   // обычный интервал между кадрами
+const COOLDOWN_MS = 20000;       // пауза после 429, пока не "остынет" лимит
 
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
@@ -20,6 +23,7 @@ const statusBadge = document.getElementById("statusBadge");
 let currentStream = null;
 let scanTimer = null;
 let requestInFlight = false; // защита от наложения запросов, если сеть медленная
+let cooldownUntil = 0;       // timestamp, до которого сканер "отдыхает" после 429
 
 async function startCamera() {
   try {
@@ -48,10 +52,18 @@ function captureFrameAsBlob() {
 
 async function scanTick() {
   if (requestInFlight) return; // пропускаем тик, если предыдущий кадр ещё обрабатывается
+  if (Date.now() < cooldownUntil) return; // ещё "остываем" после лимита
+
   requestInFlight = true;
   try {
     const blob = await captureFrameAsBlob();
-    await window.handleCapturedImage(blob);
+    const hitRateLimit = await window.handleCapturedImage(blob);
+    if (hitRateLimit) {
+      cooldownUntil = Date.now() + COOLDOWN_MS;
+      statusBadge.textContent = `Пауза ${COOLDOWN_MS / 1000}с (лимит Gemini)`;
+    } else if (scanTimer) {
+      statusBadge.textContent = "Сканирование в реальном времени";
+    }
   } finally {
     requestInFlight = false;
   }

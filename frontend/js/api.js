@@ -26,7 +26,9 @@ const manualCamera = document.getElementById("manualCamera");
 /**
  * Шаг 1: кадр с камеры -> Gemini 3.6 (мультимодально) -> текстовый ответ
  * выводится ПРЯМО на сайте. Вызывается из camera.js на каждый кадр в
- * реальном времени (см. GEMINI_SCAN_INTERVAL_MS).
+ * реальном времени. Возвращает true, если это была ошибка 429 (лимит
+ * запросов исчерпан) — camera.js использует это, чтобы сделать паузу
+ * подольше перед следующей попыткой.
  */
 window.handleCapturedImage = async function handleCapturedImage(imageBlob) {
   resultPanel.hidden = false;
@@ -41,14 +43,22 @@ window.handleCapturedImage = async function handleCapturedImage(imageBlob) {
     });
     const data = await response.json();
 
+    if (response.status === 429 || /429|Too Many Requests/i.test(data.error || "")) {
+      geminiVisionText.textContent =
+        "Достигнут бесплатный лимит запросов к Gemini — сканер немного подождёт и попробует снова.";
+      return true;
+    }
+
     if (data.error) {
       geminiVisionText.textContent = `Gemini недоступен: ${data.error}`;
-      return;
+      return false;
     }
 
     geminiVisionText.textContent = data.answer;
+    return false;
   } catch (err) {
     geminiVisionText.textContent = `Ошибка соединения с сервером: ${err}`;
+    return false;
   }
 };
 
