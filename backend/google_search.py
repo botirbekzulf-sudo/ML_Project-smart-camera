@@ -59,7 +59,15 @@ def search_specs(model_name: str) -> dict:
         response.raise_for_status()
         data = response.json()
     except requests.RequestException as exc:
-        return {"raw_text": "", "source_url": search_url, "items": [], "error": str(exc)}
+        # ВАЖНО: ключ здесь НЕ "error" (а "search_warning") специально —
+        # фронтенд (api.js) считает любое поле "error" в ответе /api/lookup
+        # фатальной ошибкой и останавливает весь дальнейший процесс
+        # (открытие Google, предсказание цены). Проблема с Custom Search
+        # API не должна ломать остальной сайт — он и так прекрасно
+        # работает без него (просто открывает Google + ручной ввод
+        # характеристик), поэтому она просто тихо логируется.
+        print(f"[google_search] Custom Search API недоступен: {exc}")
+        return {"raw_text": "", "source_url": search_url, "items": [], "search_warning": str(exc)}
 
     items = data.get("items", [])
     raw_text = " ".join(
