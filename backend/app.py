@@ -92,34 +92,41 @@ def lookup():
     """
     Принимает {"model_name": "iPhone 13"}.
 
-    Сначала Gemini 3.6 проверяет, что это похоже на название электронного
-    устройства (телефон/ноутбук/ПК/планшет и т.п.) — см. gemini_prompts.py.
-    Если нет — поиск не выполняется, фронтенду возвращается понятная ошибка.
+    ОДИН запрос к Gemini (check_and_estimate_specs) сразу и проверяет,
+    что это похоже на название электронного устройства, и — если да —
+    оценивает его типичные характеристики по своим знаниям. Объединено
+    в один вызов специально для экономии бесплатной квоты API (было два
+    отдельных запроса — стал один).
 
-    Затем выполняется обычный поиск в Google (см. google_search.py — без
-    платного Custom Search API он просто отдаёт ссылку, без характеристик).
-    Отдельно Gemini оценивает типичные характеристики устройства по своим
-    знаниям (specs_estimate) — это и используется ML-моделью для
+    Если это не устройство — поиск не выполняется, фронтенду возвращается
+    понятная ошибка. Иначе выполняется обычный поиск в Google (см.
+    google_search.py — без платного Custom Search API он просто отдаёт
+    ссылку, без характеристик) и возвращается оценка характеристик от
+    Gemini (specs_estimate) — она и используется ML-моделью для
     предсказания, если пользователь сам не ввёл характеристики вручную.
-    Без этого шага все запросы получали бы одни и те же значения по
-    умолчанию и один и тот же ценовой класс, независимо от устройства.
     """
     data = request.get_json(silent=True) or {}
     model_name = (data.get("model_name") or "").strip()
     if not model_name:
         return jsonify({"error": "Не указано название модели (model_name)"}), 400
 
-    validation = gemini_assistant.validate_device_query(model_name)
-    if not validation.get("is_device", True):
+    gemini_result = gemini_assistant.check_and_estimate_specs(model_name)
+    if not gemini_result.get("is_device", True):
         return jsonify({
-            "error": f"Похоже, это не электронное устройство: {validation.get('reason', '')}",
+            "error": f"Похоже, это не электронное устройство: {gemini_result.get('reason', '')}",
             "gemini_checked": True,
         }), 422
 
     result = google_search.search_specs(model_name)
-    result["gemini_checked"] = validation.get("checked", False)
-    result["device_category"] = validation.get("category")
-    result["specs_estimate"] = gemini_assistant.estimate_device_specs(model_name)
+    result["gemini_checked"] = gemini_result.get("checked", False)
+    result["device_category"] = gemini_result.get("category")
+    result["specs_estimate"] = {
+        "checked": all(k in gemini_result for k in ("ram_gb", "battery_mah", "storage_gb", "camera_mp")),
+        "ram_gb": gemini_result.get("ram_gb"),
+        "battery_mah": gemini_result.get("battery_mah"),
+        "storage_gb": gemini_result.get("storage_gb"),
+        "camera_mp": gemini_result.get("camera_mp"),
+    }
     return jsonify(result)
 
 
