@@ -21,6 +21,7 @@ Gemini 3.6 Flash используется как ФИЛЬТР поисковог
 from __future__ import annotations
 import base64
 import os
+import re
 import requests
 
 import gemini_prompts
@@ -129,3 +130,64 @@ def _parse_validation_response(text: str) -> dict:
 
     # Модель ответила не в ожидаемом формате — не блокируем пользователя.
     return {"is_device": True, "checked": False, "raw_response": text}
+
+
+def estimate_device_specs(model_name: str) -> dict:
+    """
+    Просит Gemini оценить типичные характеристики устройства по названию,
+    используя его знания (а не поиск в реальном времени). Это заменяет
+    платный Google Custom Search API как источник различающихся
+    характеристик для ML-модели — без него все запросы получали бы
+    одинаковый набор значений "по умолчанию" и, соответственно, всегда
+    один и тот же ценовой класс.
+
+    Возвращает {"ram_gb": float, "battery_mah": float, "storage_gb": float,
+    "camera_mp": float, "checked": True} при успехе, или
+    {"checked": False} если Gemini недоступен/квота исчерпана — тогда
+    вызывающий код должен тихо откатиться на значения по умолчанию.
+    """
+    model_name = (model_name or "").strip()
+    if not model_name or not GEMINI_API_KEY:
+        return {"checked": False}
+
+    prompt = gemini_prompts.DEVICE_SPECS_ESTIMATE_PROMPT.format(query=model_name)
+    payload = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {"maxOutputTokens": 40, "temperature": 0.2},
+    }
+
+    try:
+        response = requests.post(
+            GEMINI_ENDPOINT, params={"key": GEMINI_API_KEY}, json=payload, timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+        candidates = data.get("candidates") or []
+        if not candidates:
+            return {"checked": False}
+        parts = candidates[0].get("content", {}).get("parts", [])
+        text = "".join(p.get("text", "") for p in parts).strip()
+        return _parse_specs_estimate(text)
+    except requests.RequestException:
+        # Сеть/квота/лимит подвели — молча откатываемся на значения по
+        # умолчанию, не ломая остальной сайт.
+        return {"checked": False}
+
+
+def _parse_specs_estimate(text: str) -> dict:
+    """Разбирает 'RAM_GB=8;BATTERY_MAH=4500;STORAGE_GB=128;CAMERA_MP=108'."""
+    result: dict = {"checked": False}
+    patterns = {
+        "ram_gb": r"RAM_GB\s*=\s*([\d.]+)",
+        "battery_mah": r"BATTERY_MAH\s*=\s*([\d.]+)",
+        "storage_gb": r"STORAGE_GB\s*=\s*([\d.]+)",
+        "camera_mp": r"CAMERA_MP\s*=\s*([\d.]+)",
+    }
+    found_any = False
+    for key, pattern in patterns.items():
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            result[key] = float(match.group(1))
+            found_any = True
+    result["checked"] = found_any
+    return result

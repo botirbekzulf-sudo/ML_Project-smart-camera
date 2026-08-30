@@ -95,8 +95,14 @@ def lookup():
     Сначала Gemini 3.6 проверяет, что это похоже на название электронного
     устройства (телефон/ноутбук/ПК/планшет и т.п.) — см. gemini_prompts.py.
     Если нет — поиск не выполняется, фронтенду возвращается понятная ошибка.
-    Если да (или Gemini недоступен — тогда проверка просто пропускается) —
-    выполняется обычный поиск характеристик/цены в Google.
+
+    Затем выполняется обычный поиск в Google (см. google_search.py — без
+    платного Custom Search API он просто отдаёт ссылку, без характеристик).
+    Отдельно Gemini оценивает типичные характеристики устройства по своим
+    знаниям (specs_estimate) — это и используется ML-моделью для
+    предсказания, если пользователь сам не ввёл характеристики вручную.
+    Без этого шага все запросы получали бы одни и те же значения по
+    умолчанию и один и тот же ценовой класс, независимо от устройства.
     """
     data = request.get_json(silent=True) or {}
     model_name = (data.get("model_name") or "").strip()
@@ -113,6 +119,7 @@ def lookup():
     result = google_search.search_specs(model_name)
     result["gemini_checked"] = validation.get("checked", False)
     result["device_category"] = validation.get("category")
+    result["specs_estimate"] = gemini_assistant.estimate_device_specs(model_name)
     return jsonify(result)
 
 

@@ -98,14 +98,17 @@ modelForm.addEventListener("submit", async (event) => {
       window.open(data.source_url, "_blank", "noopener");
     }
 
-    // Шаг 3: если пользователь вписал характеристики вручную — используем
-    // их (даёт точный и РАЗНЫЙ результат для разных устройств). Иначе —
-    // то, что нашлось в raw_text (без платного Google API оно обычно
-    // пустое, и тогда модель работает на одних значениях по умолчанию —
-    // отсюда одинаковый класс для всех устройств).
+    // Шаг 3: приоритет источников характеристик для ML-модели:
+    //   1) то, что пользователь вписал вручную (самое надёжное);
+    //   2) оценка Gemini по названию модели (specs_estimate) — работает
+    //      без платного Google API и даёт РАЗНЫЙ результат для разных
+    //      устройств, в отличие от пустого raw_text;
+    //   3) сырой текст из Google (если вдруг настроен Custom Search API).
     const manualForm = collectManualSpecs();
     if (manualForm) {
       await predictPriceFromForm(manualForm);
+    } else if (data.specs_estimate && data.specs_estimate.checked) {
+      await predictPriceFromForm(estimateToForm(data.specs_estimate));
     } else {
       await predictPriceFromText(data.raw_text || "");
     }
@@ -114,6 +117,16 @@ modelForm.addEventListener("submit", async (event) => {
     lookupError.hidden = false;
   }
 });
+
+/** Переводит оценку Gemini (specs_estimate) в формат для /api/predict-price. */
+function estimateToForm(estimate) {
+  const form = {};
+  if (estimate.ram_gb) form.ram = estimate.ram_gb * 1024; // модель ждёт RAM в МБ
+  if (estimate.battery_mah) form.battery_power = estimate.battery_mah;
+  if (estimate.storage_gb) form.int_memory = estimate.storage_gb;
+  if (estimate.camera_mp) form.pc = estimate.camera_mp;
+  return form;
+}
 
 /** Собирает заполненные вручную поля характеристик. null, если все пустые. */
 function collectManualSpecs() {
